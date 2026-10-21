@@ -1,0 +1,132 @@
+DROP TABLE IF EXISTS dados_fase2_temp;
+
+CREATE TEMPORARY TABLE dados_fase2_temp (
+    "ID" TEXT,
+    "Latitude" NUMERIC,
+    "Longitude" NUMERIC,
+    "Notes" TEXT,
+    "DMS"   TEXT,
+    "UTM"   TEXT,
+    "MGRS"  TEXT,
+    "CRS"   TEXT,
+    "CRS Code" TEXT,
+    "Elevation(MSL)" NUMERIC,
+    "Address"     TEXT,
+    "Date Record" TEXT,
+    "GPS Accuracy(m)" NUMERIC,
+    "Photo1" TEXT,
+    "Photo2" TEXT,
+    "Photo3" TEXT
+);
+
+/* usa o comando copy para importação inicial em formato textual, tem nomes de colunas com espaços */
+
+COPY dados_fase2_temp("ID","Latitude","Longitude","Notes","DMS","UTM","MGRS",
+                      "CRS","CRS Code","Elevation(MSL)","Address","Date Record",
+                      "GPS Accuracy(m)","Photo1","Photo2","Photo3")
+   FROM 'c:/temp/prj_grupo4_gabrielsilva_fase2.csv'
+ with (
+  format csv,HEADER true,DELIMITER ',',ENCODING 'UTF8',NULL 'null',
+  FORCE_NULL ("Elevation(MSL)","GPS Accuracy(m)")  -- converte "" nessas colunas para NULL
+);
+
+/* criação da tabela final com tratamento de colunas e dados */
+
+DROP TABLE IF EXISTS DADOSFASE2;
+
+CREATE TABLE IF NOT EXISTS dadosfase2 (
+    id BIGSERIAL PRIMARY KEY,
+    codigo    VARCHAR,
+    latitude  NUMERIC,
+    longitude NUMERIC,
+    geom GEOMETRY(Point, 4326),
+    notes    VARCHAR,
+    dms      VARCHAR,
+    utm      VARCHAR,
+    mgrs     VARCHAR,
+    crs      VARCHAR,
+    crs_code VARCHAR,
+    elevation_msl NUMERIC,
+    address       VARCHAR,
+    date_record   VARCHAR,
+    gps_accuracy  NUMERIC,
+    photo1        VARCHAR,
+    photo2        VARCHAR,
+    photo3        VARCHAR
+);
+
+
+INSERT INTO dadosfase2 (
+    codigo,
+    latitude,
+    longitude,
+    geom,
+    notes,
+    dms,
+    utm,
+    mgrs,
+    crs,
+    crs_code,
+    elevation_msl,
+    address,
+    date_record,
+    gps_accuracy,
+    photo1,
+    photo2,
+    photo3
+)
+SELECT
+    NULLIF(TRIM("ID"), '')                                         AS codigo,
+    "Latitude"                                                     AS latitude,
+    "Longitude"                                                    AS longitude,
+    CASE 
+      WHEN "Longitude" IS NOT NULL AND "Latitude" IS NOT NULL
+         THEN ST_SetSRID(ST_MakePoint("Longitude", "Latitude"), 4326)
+      ELSE 
+	     NULL
+    END                                                            AS geom,
+    NULLIF(TRIM("Notes"), '')                                      AS notes,
+    NULLIF(TRIM("DMS"), '')                                        AS dms,
+    NULLIF(TRIM("UTM"), '')                                        AS utm,
+    NULLIF(TRIM("MGRS"), '')                                       AS mgrs,
+    NULLIF(TRIM("CRS"), '')                                        AS crs,
+    NULLIF(TRIM("CRS Code"), '')                                   AS crs_code,
+    "Elevation(MSL)"                                               AS elevation_msl,
+    NULLIF(TRIM("Address"), '')                                    AS address,
+	NULLIF(TRIM("Date Record"), '')                                AS date_record,
+    "GPS Accuracy(m)"                                              AS gps_accuracy,
+    NULLIF(TRIM("Photo1"), '')                                     AS photo1,
+    NULLIF(TRIM("Photo2"), '')                                     AS photo2,
+    NULLIF(TRIM("Photo3"), '')                                     AS photo3
+FROM dados_fase2_temp;
+
+UPDATE DADOSFASE2 
+ SET PHOTO1 = LOWER(SPLIT_PART(PHOTO1,'/',-1)),
+     PHOTO2 = LOWER(SPLIT_PART(PHOTO2,'/',-1)), 
+  	 PHOTO3 = LOWER(SPLIT_PART(PHOTO3,'/',-1)),
+     CODIGO = LOWER(CODIGO);
+
+
+ALTER TABLE DADOSFASE2 
+      ADD COLUMN IF NOT EXISTS FOTO1_BYTEA BYTEA,
+      ADD COLUMN IF NOT EXISTS FOTO2_BYTEA BYTEA,
+      ADD COLUMN IF NOT EXISTS FOTO3_BYTEA BYTEA;
+
+select * from dadosfase2;
+
+SELECT jsonb_build_object(
+ 'type','FeatureCollection',
+ 'features', jsonb_agg(
+ jsonb_build_object(
+ 'type','Feature',
+ 'geometry', ST_AsGeoJSON(ST_Transform(geom,4326))::jsonb,
+ 'properties', jsonb_build_object(
+ 'name','Foto '||id,
+ 'iconClass','Circle',
+ 'marker-symbol','skull',
+ 'marker-size','large',
+ 'color','#0000aa',
+ 'description',
+ '<img src="https://raw.githubusercontent.com/'||'gabrielsilvabg016-star'||'/probvias_bg/main/fase2/'||photo1||'" style="width:512px;height:auto;">'
+ )))) 
+from dadosfase2
