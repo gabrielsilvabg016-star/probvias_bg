@@ -1,0 +1,4 @@
+1 - Alterar o caminho nos codigos (update_pontos, relatoriofase1 e inserts) quando for fazer o meu relatorio.
+2 - Rodar nessa ordem, inserts com o csv, update_pontos (abrir o terminal na pasta que esta esse lembrete), relatoriofase1
+3 - Trocar o ponto 1 nas imagens.
+4 - 
